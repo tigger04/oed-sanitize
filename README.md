@@ -43,8 +43,7 @@ Subcommands can be combined in any order. Running `sanitize` with no subcommands
 ## Installation
 
 ```bash
-brew tap tigger04/tap
-brew install sanitize
+brew install tigger04/tap/sanitize
 ```
 
 Or build from source:
