@@ -147,3 +147,49 @@ func TestCLI_NoTxtFilesInDir_StillWorks_RT016(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "organize")
 	}
 }
+
+// RT-028: sanitize symbols pipe round-trip with change count on stderr
+func TestCLI_SymbolsPipeRoundTrip_CorrectOutputAndStderr_RT028(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin, "symbols")
+	cmd.Stdin = strings.NewReader("He said \u201chello\u201d\u2026")
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	got := strings.TrimRight(string(out), "\n")
+	want := `He said "hello"...`
+	if got != want {
+		t.Errorf("stdout: got %q, want %q", got, want)
+	}
+
+	errOut := stderr.String()
+	if errOut == "" {
+		t.Error("expected stderr output, got empty")
+	}
+}
+
+// RT-029: sanitize symbols -q suppresses stderr
+func TestCLI_SymbolsQuietFlag_StderrEmpty_RT029(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin, "symbols", "-q")
+	cmd.Stdin = strings.NewReader("He said \u201chello\u201d")
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if stderr.String() != "" {
+		t.Errorf("expected empty stderr with -q, got %q", stderr.String())
+	}
+}
