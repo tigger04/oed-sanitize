@@ -29,7 +29,7 @@ Flags:
   -h        Print usage
   --version Print version
 
-No subcommand → error with usage message.
+No subcommand → defaults to both oed + symbols (notice on stderr, suppressed by -q).
 Subcommands can appear in any order.
 Multiple subcommands apply all transformations in a fixed internal order.
 ```

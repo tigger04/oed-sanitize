@@ -31,7 +31,7 @@ echo 'I need to "organise" the center…' | sanitize oed symbols
 | `oed` | Converts US spellings to UK (center→centre) and non-OED -ise to -ize (organise→organize) |
 | `symbols` | Converts typographic characters to ASCII equivalents (smart quotes, em/en dashes, ellipsis, bullets, arrows) |
 
-Subcommands can be combined in any order. Running `sanitize` with no subcommands prints usage and exits with an error.
+Subcommands can be combined in any order. Running `sanitize` with no subcommands defaults to applying both `oed` and `symbols`.
 
 ## Flags
 
