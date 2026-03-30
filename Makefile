@@ -11,7 +11,7 @@ CURRENT_VERSION := $(shell cat VERSION | tr -d '[:space:]')
 VERSION ?= $(CURRENT_VERSION)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
-.PHONY: build test test-one-off install clean release sync
+.PHONY: build test test-one-off install uninstall clean release sync
 
 build:
 	$(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/sanitize/
@@ -31,6 +31,10 @@ install: build
 	@mkdir -p ~/bin
 	cp $(BUILD_DIR)/$(BINARY) ~/bin/$(BINARY)
 	@echo "Installed $(BINARY) $(VERSION) to ~/bin/$(BINARY)"
+
+uninstall:
+	rm -f ~/bin/$(BINARY)
+	@echo "Removed $(BINARY) from ~/bin"
 
 clean:
 	rm -f $(BUILD_DIR)/$(BINARY)
