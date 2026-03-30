@@ -101,30 +101,22 @@ func main() {
 	}
 
 	if !quiet {
-		totalChanges := 0
-		var parts []string
-		if oedEngine != nil && oedEngine.Changes > 0 {
-			parts = append(parts, fmt.Sprintf("%d spelling corrections", oedEngine.Changes))
-			totalChanges += oedEngine.Changes
+		if oedEngine != nil && oedEngine.SpellingChanges > 0 {
+			fmt.Fprintln(os.Stderr, pluralize(oedEngine.SpellingChanges, "US spelling correction"))
+		}
+		if oedEngine != nil && oedEngine.IzeChanges > 0 {
+			fmt.Fprintln(os.Stderr, pluralize(oedEngine.IzeChanges, "-ize correction"))
 		}
 		if symEngine != nil && symEngine.Changes > 0 {
-			parts = append(parts, fmt.Sprintf("%d symbol replacements", symEngine.Changes))
-			totalChanges += symEngine.Changes
-		}
-		if totalChanges > 0 {
-			fmt.Fprintln(os.Stderr, joinParts(parts))
+			fmt.Fprintln(os.Stderr, pluralize(symEngine.Changes, "symbol replacement"))
 		}
 	}
 }
 
-// joinParts joins summary parts with ", ".
-func joinParts(parts []string) string {
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += ", "
-		}
-		result += p
+// pluralize returns "N label" for count==1, "N labels" otherwise.
+func pluralize(count int, label string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, label)
 	}
-	return result
+	return fmt.Sprintf("%d %ss", count, label)
 }

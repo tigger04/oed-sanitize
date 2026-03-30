@@ -104,8 +104,12 @@ func TestCLI_DefaultFlags_StderrHasCount_RT014(t *testing.T) {
 	if errOut == "" {
 		t.Error("expected stderr output, got empty")
 	}
-	if !strings.Contains(errOut, "2") {
-		t.Errorf("expected stderr to mention count of 2 corrections, got %q", errOut)
+	// "organise the center" triggers 1 US spelling + 1 -ize correction
+	if !strings.Contains(errOut, "US spelling") {
+		t.Errorf("expected stderr to mention US spelling corrections, got %q", errOut)
+	}
+	if !strings.Contains(errOut, "-ize") {
+		t.Errorf("expected stderr to mention -ize corrections, got %q", errOut)
 	}
 }
 
@@ -385,5 +389,199 @@ func TestCLI_NoSubcommandQuiet_StderrEmpty_RT039(t *testing.T) {
 
 	if stderr.String() != "" {
 		t.Errorf("expected empty stderr with -q, got %q", stderr.String())
+	}
+}
+
+// --- Issue #8: summary format tests ---
+
+// summaryLines extracts non-empty summary lines from stderr, skipping the
+// "defaulting to oed + symbols" notice if present.
+func summaryLines(stderr string) []string {
+	var lines []string
+	for _, l := range strings.Split(stderr, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.Contains(l, "defaulting") {
+			continue
+		}
+		lines = append(lines, l)
+	}
+	return lines
+}
+
+// RT-043: single US spelling change uses singular label
+func TestCLI_SingleUSSpelling_SingularLabel_RT043(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("center")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
+	}
+	if lines[0] != "1 US spelling correction" {
+		t.Errorf("got %q, want %q", lines[0], "1 US spelling correction")
+	}
+}
+
+// RT-044: multiple US spelling changes uses plural label
+func TestCLI_MultipleUSSpelling_PluralLabel_RT044(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("center color")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
+	}
+	if lines[0] != "2 US spelling corrections" {
+		t.Errorf("got %q, want %q", lines[0], "2 US spelling corrections")
+	}
+}
+
+// RT-045: single symbol change uses singular label
+func TestCLI_SingleSymbol_SingularLabel_RT045(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "symbols")
+	cmd.Stdin = strings.NewReader("\u2014")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
+	}
+	if lines[0] != "1 symbol replacement" {
+		t.Errorf("got %q, want %q", lines[0], "1 symbol replacement")
+	}
+}
+
+// RT-046: single -ize change uses singular label
+func TestCLI_SingleIze_SingularLabel_RT046(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("organise")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
+	}
+	if lines[0] != "1 -ize correction" {
+		t.Errorf("got %q, want %q", lines[0], "1 -ize correction")
+	}
+}
+
+// RT-047: US spelling only — no -ize line on stderr
+func TestCLI_USSpellingOnly_NoIzeLine_RT047(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("center")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	errOut := stderr.String()
+	if !strings.Contains(errOut, "US spelling") {
+		t.Errorf("expected US spelling line, got %q", errOut)
+	}
+	if strings.Contains(errOut, "-ize") {
+		t.Errorf("expected no -ize line, got %q", errOut)
+	}
+}
+
+// RT-048: -ize only — no US spelling line on stderr
+func TestCLI_IzeOnly_NoUSSpellingLine_RT048(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("organise")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	errOut := stderr.String()
+	if !strings.Contains(errOut, "-ize") {
+		t.Errorf("expected -ize line, got %q", errOut)
+	}
+	if strings.Contains(errOut, "US spelling") {
+		t.Errorf("expected no US spelling line, got %q", errOut)
+	}
+}
+
+// RT-049: both US and -ize triggered — two separate lines
+func TestCLI_BothUSAndIze_TwoLines_RT049(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("center organise")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 summary lines, got %d: %q", len(lines), stderr.String())
+	}
+	hasUS := false
+	hasIze := false
+	for _, l := range lines {
+		if strings.Contains(l, "US spelling") {
+			hasUS = true
+		}
+		if strings.Contains(l, "-ize") {
+			hasIze = true
+		}
+	}
+	if !hasUS {
+		t.Errorf("missing US spelling line in %q", stderr.String())
+	}
+	if !hasIze {
+		t.Errorf("missing -ize line in %q", stderr.String())
+	}
+}
+
+// RT-050: all three categories — three separate lines
+func TestCLI_AllThreeCategories_ThreeLines_RT050(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin)
+	cmd.Stdin = strings.NewReader("center organise \u2014")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 summary lines, got %d: %q", len(lines), stderr.String())
+	}
+}
+
+// RT-051: one category only — exactly one summary line
+func TestCLI_OneCategory_OneLine_RT051(t *testing.T) {
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "symbols")
+	cmd.Stdin = strings.NewReader("\u2014")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	lines := summaryLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
 	}
 }
