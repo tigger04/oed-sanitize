@@ -28,16 +28,16 @@ else
 endif
 
 install: build
-	@mkdir -p ~/bin
-	cp $(BUILD_DIR)/$(BINARY) ~/bin/$(BINARY)
-	@echo "Installed $(BINARY) $(VERSION) to ~/bin/$(BINARY)"
+	@mkdir -p ~/.local/bin
+	ln -sf $(CURDIR)/$(BINARY) ~/.local/bin/$(BINARY)
+	@echo "Installed $(BINARY) $(VERSION) → ~/.local/bin/$(BINARY)"
 
 uninstall:
-	rm -f ~/bin/$(BINARY)
-	@echo "Removed $(BINARY) from ~/bin"
+	@if [ -e ~/.local/bin/$(BINARY) ]; then trash ~/.local/bin/$(BINARY); fi
+	@echo "Removed $(BINARY) from ~/.local/bin"
 
 clean:
-	rm -f $(BUILD_DIR)/$(BINARY)
+	@if [ -e $(BUILD_DIR)/$(BINARY) ]; then trash $(BUILD_DIR)/$(BINARY); fi
 
 # Release workflow:
 #   make release                    — increment minor version (0.1.0 → 0.2.0)
