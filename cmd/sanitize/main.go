@@ -50,9 +50,16 @@ func main() {
 		}
 	}
 
+	// Default to both when no subcommand specified
+	defaulting := false
 	if !doOED && !doSymbols {
-		fmt.Fprintln(os.Stderr, usageText)
-		os.Exit(2)
+		doOED = true
+		doSymbols = true
+		defaulting = true
+	}
+
+	if defaulting && !quiet {
+		fmt.Fprintln(os.Stderr, "sanitize: defaulting to oed + symbols")
 	}
 
 	var oedEngine *spelling.OEDEngine

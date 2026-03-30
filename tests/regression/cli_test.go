@@ -194,23 +194,17 @@ func TestCLI_SymbolsQuietFlag_StderrEmpty_RT029(t *testing.T) {
 	}
 }
 
-// RT-030: no subcommand exits non-zero with usage on stderr
-func TestCLI_NoSubcommand_ExitsNonZeroWithUsage_RT030(t *testing.T) {
+// RT-030: no subcommand defaults to both (exits 0, not error)
+// Updated for issue #5: no subcommand now defaults to oed + symbols
+func TestCLI_NoSubcommand_ExitsZero_RT030(t *testing.T) {
 	bin := binaryPath(t)
 
-	cmd := exec.Command(bin)
+	cmd := exec.Command(bin, "-q")
 	cmd.Stdin = strings.NewReader("")
 
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-
 	err := cmd.Run()
-	if err == nil {
-		t.Fatal("expected non-zero exit, got success")
-	}
-
-	if !strings.Contains(stderr.String(), "usage") {
-		t.Errorf("expected usage in stderr, got %q", stderr.String())
+	if err != nil {
+		t.Fatalf("expected exit 0, got error: %v", err)
 	}
 }
 
@@ -315,5 +309,81 @@ func TestCLI_VersionFlag_ExitsZeroWithVersion_RT035(t *testing.T) {
 	combined := stdout.String() + stderr.String()
 	if !strings.Contains(combined, "sanitize") {
 		t.Errorf("expected version string containing 'sanitize', got stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+// RT-036: no subcommand defaults to both oed + symbols
+func TestCLI_NoSubcommand_DefaultsBoth_RT036(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin, "-q")
+	cmd.Stdin = strings.NewReader("organise the center\u2026")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	got := strings.TrimRight(string(out), "\n")
+	want := "organize the centre..."
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-037: defaulting notice on stderr when no subcommand given
+func TestCLI_NoSubcommand_StderrHasDefaultingNotice_RT037(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin)
+	cmd.Stdin = strings.NewReader("organise")
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	lines := strings.Split(stderr.String(), "\n")
+	if len(lines) == 0 || !strings.Contains(lines[0], "defaulting") {
+		t.Errorf("expected first stderr line to contain 'defaulting', got %q", stderr.String())
+	}
+}
+
+// RT-038: no defaulting notice when subcommands are explicit
+func TestCLI_ExplicitSubcommand_NoDefaultingNotice_RT038(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin, "oed")
+	cmd.Stdin = strings.NewReader("organise")
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if strings.Contains(stderr.String(), "defaulting") {
+		t.Errorf("expected no defaulting notice with explicit subcommand, got %q", stderr.String())
+	}
+}
+
+// RT-039: -q suppresses defaulting notice and summary when no subcommand
+func TestCLI_NoSubcommandQuiet_StderrEmpty_RT039(t *testing.T) {
+	bin := binaryPath(t)
+
+	cmd := exec.Command(bin, "-q")
+	cmd.Stdin = strings.NewReader("organise the center\u2026")
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if stderr.String() != "" {
+		t.Errorf("expected empty stderr with -q, got %q", stderr.String())
 	}
 }
