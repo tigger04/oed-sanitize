@@ -585,3 +585,163 @@ func TestCLI_OneCategory_OneLine_RT051(t *testing.T) {
 		t.Fatalf("expected 1 summary line, got %d: %q", len(lines), stderr.String())
 	}
 }
+
+// --- Issue #10: code block protection tests ---
+
+// runSanitize is a helper that pipes input through the sanitize binary with -q
+// and returns stdout. Uses both oed + symbols subcommands.
+func runSanitize(t *testing.T, input string) string {
+	t.Helper()
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "-q")
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+	return string(out)
+}
+
+// RT-10.1: OED-correctable word inside fenced block passes through unchanged
+// User action: pipe a Markdown doc with a fenced code block containing "center"
+// User observes: "center" is unchanged in the output
+func TestCLI_FencedBlock_OEDSkipped_RT10_1(t *testing.T) {
+	input := "```\ncenter\n```\n"
+	got := runSanitize(t, input)
+	want := "```\ncenter\n```\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.2: Typographic symbol inside fenced block passes through unchanged
+// User action: pipe a Markdown doc with an em dash inside a fenced code block
+// User observes: the em dash is preserved, not converted to ASCII hyphen
+func TestCLI_FencedBlock_SymbolsSkipped_RT10_2(t *testing.T) {
+	input := "```\nvalue \u2014 other\n```\n"
+	got := runSanitize(t, input)
+	want := "```\nvalue \u2014 other\n```\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.3: Fenced block with language specifier still protects content
+// User action: pipe a Markdown doc with ```makefile block containing "center"
+// User observes: "center" inside the block is unchanged
+func TestCLI_FencedBlockLangSpec_Protected_RT10_3(t *testing.T) {
+	input := "```makefile\n.PHONY: center organize\n```\n"
+	got := runSanitize(t, input)
+	want := "```makefile\n.PHONY: center organize\n```\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.4: Multi-line fenced block protects all enclosed lines
+// User action: pipe a Markdown doc with several lines inside a fenced block
+// User observes: every line inside the block is unchanged
+func TestCLI_FencedBlockMultiLine_AllProtected_RT10_4(t *testing.T) {
+	input := "```\ncenter\norganise\ncolor \u2014 flavor\n```\n"
+	got := runSanitize(t, input)
+	want := "```\ncenter\norganise\ncolor \u2014 flavor\n```\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.5: OED-correctable word inside inline backticks passes through unchanged
+// User action: pipe a line with `center` in backticks
+// User observes: "center" inside backticks is unchanged
+func TestCLI_InlineCode_OEDSkipped_RT10_5(t *testing.T) {
+	input := "the `center` variable\n"
+	got := runSanitize(t, input)
+	want := "the `center` variable\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.6: Typographic symbol inside inline backticks passes through unchanged
+// User action: pipe a line with an em dash inside backticks
+// User observes: the em dash inside backticks is preserved
+func TestCLI_InlineCode_SymbolsSkipped_RT10_6(t *testing.T) {
+	input := "use `a \u2014 b` for ranges\n"
+	got := runSanitize(t, input)
+	want := "use `a \u2014 b` for ranges\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.7: Multiple inline code spans on one line are each protected
+// User action: pipe a line with two separate backtick spans
+// User observes: both spans are unchanged
+func TestCLI_InlineCodeMultiSpan_AllProtected_RT10_7(t *testing.T) {
+	input := "use `center` and `color` here\n"
+	got := runSanitize(t, input)
+	want := "use `center` and `color` here\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.8: Text outside inline code span is corrected, text inside is not
+// User action: pipe a line with both inline code and normal text containing correctable words
+// User observes: "center" outside backticks becomes "centre", "color" inside backticks stays "color"
+func TestCLI_InlineCodeMixed_OutsideCorrected_RT10_8(t *testing.T) {
+	input := "the center of `color` is important\n"
+	got := runSanitize(t, input)
+	want := "the centre of `color` is important\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.9: Lines before and after a fenced code block are corrected normally
+// User action: pipe a doc with text, then fenced block, then more text
+// User observes: surrounding text is corrected, block content is not
+func TestCLI_FencedBlockAdjacent_SurroundingCorrected_RT10_9(t *testing.T) {
+	input := "center\n```\ncenter\n```\ncenter\n"
+	got := runSanitize(t, input)
+	want := "centre\n```\ncenter\n```\ncentre\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.10: OED-correctable word inside org-mode source block passes through unchanged
+// User action: pipe an org-mode file with #+BEGIN_SRC block containing "center"
+// User observes: "center" inside the block is unchanged
+func TestCLI_OrgSrcBlock_OEDSkipped_RT10_10(t *testing.T) {
+	input := "#+BEGIN_SRC\ncenter\n#+END_SRC\n"
+	got := runSanitize(t, input)
+	want := "#+BEGIN_SRC\ncenter\n#+END_SRC\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.11: Org-mode source block with language specifier still protects content
+// User action: pipe an org file with #+BEGIN_SRC bash block
+// User observes: content inside is unchanged
+func TestCLI_OrgSrcBlockLangSpec_Protected_RT10_11(t *testing.T) {
+	input := "#+BEGIN_SRC bash\norganise center\n#+END_SRC\n"
+	got := runSanitize(t, input)
+	want := "#+BEGIN_SRC bash\norganise center\n#+END_SRC\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// RT-10.12: Case-insensitive matching — mixed-case delimiters are recognised
+// User action: pipe an org file with lowercase #+begin_src delimiters
+// User observes: content inside is unchanged
+func TestCLI_OrgSrcBlockCaseInsensitive_RT10_12(t *testing.T) {
+	input := "#+begin_src python\ncolor = \"center\"\n#+end_src\n"
+	got := runSanitize(t, input)
+	want := "#+begin_src python\ncolor = \"center\"\n#+end_src\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
