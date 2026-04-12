@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tigger04/oed-sanitize/data"
 	"github.com/tigger04/oed-sanitize/pkg/spelling"
@@ -81,15 +82,25 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 
+	inCodeBlock := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		// Fixed order: spelling first, then symbols (per architecture.md)
-		if oedEngine != nil {
-			line = oedEngine.ProcessLine(line)
+
+		// Check for fenced code block delimiters (Markdown ``` and org-mode #+BEGIN_SRC/#+END_SRC)
+		if isCodeBlockDelimiter(line, inCodeBlock) {
+			inCodeBlock = !inCodeBlock
+			fmt.Fprintln(writer, line)
+			continue
 		}
-		if symEngine != nil {
-			line = symEngine.ProcessLine(line)
+
+		// Lines inside fenced/org code blocks pass through unchanged
+		if inCodeBlock {
+			fmt.Fprintln(writer, line)
+			continue
 		}
+
+		// Process inline code spans: split, process only Text segments, reassemble
+		line = processWithCodeSpans(line, oedEngine, symEngine)
 		fmt.Fprintln(writer, line)
 	}
 
@@ -119,4 +130,64 @@ func pluralize(count int, label string) string {
 		return fmt.Sprintf("%d %s", count, label)
 	}
 	return fmt.Sprintf("%d %ss", count, label)
+}
+
+// isCodeBlockDelimiter returns true if the line opens or closes a fenced code
+// block. Supports Markdown triple-backtick (with optional language identifier)
+// and org-mode #+BEGIN_SRC / #+END_SRC (case-insensitive).
+func isCodeBlockDelimiter(line string, inBlock bool) bool {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "```") {
+		return true
+	}
+	upper := strings.ToUpper(trimmed)
+	if !inBlock && (upper == "#+BEGIN_SRC" || strings.HasPrefix(upper, "#+BEGIN_SRC ")) {
+		return true
+	}
+	if inBlock && upper == "#+END_SRC" {
+		return true
+	}
+	return false
+}
+
+// processWithCodeSpans splits a line into code and text segments, applies
+// engines only to text segments, and reassembles the line.
+func processWithCodeSpans(line string, oedEngine *spelling.OEDEngine, symEngine *spelling.SymbolEngine) string {
+	segments := spelling.SplitCodeSpans(line)
+
+	// Fast path: if there are no code spans, process the whole line directly
+	hasCode := false
+	for _, seg := range segments {
+		if seg.Kind == spelling.Code {
+			hasCode = true
+			break
+		}
+	}
+	if !hasCode {
+		if oedEngine != nil {
+			line = oedEngine.ProcessLine(line)
+		}
+		if symEngine != nil {
+			line = symEngine.ProcessLine(line)
+		}
+		return line
+	}
+
+	// Process only Text segments, leave Code segments unchanged
+	var result strings.Builder
+	for _, seg := range segments {
+		if seg.Kind == spelling.Text {
+			s := seg.Content
+			if oedEngine != nil {
+				s = oedEngine.ProcessLine(s)
+			}
+			if symEngine != nil {
+				s = symEngine.ProcessLine(s)
+			}
+			result.WriteString(s)
+		} else {
+			result.WriteString(seg.Content)
+		}
+	}
+	return result.String()
 }
